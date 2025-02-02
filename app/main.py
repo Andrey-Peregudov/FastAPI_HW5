@@ -6,10 +6,9 @@ from starlette.requests import Request
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from app.pydantic_create import UserCreate
 from models import db, User, Car
 # from .pydantic_read import UserResponse, CarResponse
-# from .pydantic_create import UserCreate, CarCreate
+from pydantic_create import UserCreate, CarCreate
 
 
 middleware = [
@@ -46,12 +45,17 @@ templates = Jinja2Templates(directory="templates")
 
 
 users = []
+cars = []
 
 @app.post('/usr_name')
 async def user_name(user_name: UserCreate):
     users.append(user_name)
     return users
 
+@app.post('/user_cars')
+async def user_cars(car_name: CarCreate):
+    cars.append(car_name)
+    return cars
 
 # db.bind(provider='postgres', user='fastapi_jinja2', password='fastapi_jinja2', host='db', database='fastapi_jinja2',
 #         port='5432')
