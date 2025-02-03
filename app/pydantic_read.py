@@ -7,7 +7,6 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: Optional[str]
-    name: str
     cars: List[str]
 
 

@@ -1,13 +1,10 @@
-from fastapi import FastAPI, Form
+from http.client import HTTPException
+from pony.orm import *
+from fastapi import FastAPI, Form, Depends
 from starlette.middleware import Middleware
-from starlette.responses import HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
-
+from pydantic_read import CarResponse
 from models import db, User, Car
-# from .pydantic_read import UserResponse, CarResponse
 from pydantic_create import UserCreate, CarCreate
 
 
@@ -20,50 +17,98 @@ middleware = [
         allow_headers=['*']
     )
 ]
-
-app = FastAPI(middleware=middleware, title='FastAPI Jinja2 Postress Websocket')
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
+#Создание Экземпляра класса FastAPI
+app = FastAPI(middleware=middleware, title='FastAPI Домашняя работа')
+# templates = Jinja2Templates(directory="templates")
 
 
 
-# @app.post("/user_name")
-# async def user_name():
-#     return {"Hello": "id"}
 
-#
-# @app.get("/test/{id}", response_class=HTMLResponse)
-# async def root(request: Request, id: str):
-#     return templates.TemplateResponse(
-#         request=request, name="index.html", context={"id": id})
-#
-#
-# @app.get("/form", response_class=HTMLResponse)
-# async def form(request: Request):
-#     return templates.TemplateResponse('form.html', {'request': request})
+#Функция поиска по имени
+@db_session
+def get_user_by_username(username: str):
+    user = User.get(username=username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
-users = []
-cars = []
+#Функция поиска по id
+@db_session
+def get_user_by_id(user_id: int):
+    user = User.get(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
-@app.post('/usr_name')
-async def user_name(user_name: UserCreate):
-    users.append(user_name)
-    return users
 
-@app.post('/user_cars')
-async def user_cars(car_name: CarCreate):
-    cars.append(car_name)
-    return cars
+#Функция добавления пользователя
+@app.post("/users", summary="Создание нового пользователя", tags=["Добавить пользователя"])
+@db_session
+def create_user(user: UserCreate):
+    new_user = User(**user.dict())
+    commit()
+    return {
+        "id": new_user.id,
+        "username": new_user.username,
+        "email": new_user.email,
+        "cars": [car.model for car in new_user.cars],
+    }
 
-# db.bind(provider='postgres', user='fastapi_jinja2', password='fastapi_jinja2', host='db', database='fastapi_jinja2',
-#         port='5432')
-# db.generate_mapping(create_tables=True)
+#Функция удаления пользователя
+@app.delete("/users/{user_id}", summary="Удалить пользователя", tags=["Удалить пользователя"])
+@db_session
+def delete_user(user_id: int):
+    user = get_user_by_id(user_id)
+    user.delete()
+    commit()
 
-# import user
 
-# app.include_router(user.router, prefix="/user", tags=["user"])
+
+#Функцяи добавления автомобиля
+@app.post("/users/{user_id}/cars", summary="Добавление автомобиля", tags=["Добавить автомобиль"])
+@db_session
+def add_car_to_user(user_id: int, car: CarCreate):
+    user = get_user_by_id(user_id)
+    new_car = Car(**car.dict(), user=user)
+    commit()
+    return {
+        "id": new_car.id,
+        "model": new_car.model,
+        "year": new_car.year,
+    }
+
+#Функция поиска по имени
+@app.get("/users/{username}", summary="Поиск по имени", tags=["Поиск по имени пользователя"])
+@db_session
+def find_user_by_username(username: str, user: User = Depends(get_user_by_username)):
+    user = get_user_by_username(username)
+    cars_data = [CarResponse(id=car.id, model=car.model, year=car.year) for car in user.cars]
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "cars": cars_data,
+    }
+
+
+#Функция поиска всех автомобилей пользователя
+@app.get("/users/{user_id}/cars", summary="Все автомобили пользоватея", tags=["Вывод всех автомобилей пользователя"])
+@db_session
+def get_all_user_cars(user_id: int):
+    user = get_user_by_id(user_id)
+    return [
+        {
+            "id": car.id,
+            "model": car.model,
+            "year": car.year
+         }
+        for car in user.cars
+    ]
+
+#Создание базы данных
+db.bind(provider="sqlite", filename="database.db", create_db=True)
+db.generate_mapping(create_tables=True)
 
 
 
